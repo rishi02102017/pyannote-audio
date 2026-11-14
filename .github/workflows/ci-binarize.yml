@@ -1,0 +1,43 @@
+name: ci-binarize
+on:
+  push:
+    branches: [ci/binarize-short-scores]
+  workflow_dispatch:
+env:
+  PYANNOTE_METRICS_ENABLED: "0"
+  HF_HUB_DISABLE_TELEMETRY: "1"
+  HF_HUB_OFFLINE: "1"
+  OMP_NUM_THREADS: "2"
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        code: [fixed, main]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Use main's signal.py for the baseline
+        if: matrix.code == 'main'
+        run: git checkout 0d6f291 -- src/pyannote/audio/utils/signal.py && git status --short
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: |
+          uv venv
+          uv pip install --torch-backend cpu -e ".[test,cli]"
+      - name: New tests
+        continue-on-error: ${{ matrix.code == 'main' }}
+        run: .venv/bin/python -m pytest -v tests/utils/test_signal.py
+      - name: Full test suite
+        run: .venv/bin/python -m pytest tests -q -m "not network and not notebook"
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uvx ruff check src/pyannote/audio/utils/signal.py tests/utils/test_signal.py
+      - run: uvx ruff format --check --diff src/pyannote/audio/utils/signal.py tests/utils/test_signal.py
