@@ -1,0 +1,25 @@
+name: probe
+on:
+  push:
+    branches: ["ci/probe-*"]
+  workflow_dispatch:
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        src: [pypi, main]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
+      - run: pip install -q torch torchaudio torchcodec --index-url https://download.pytorch.org/whl/cpu
+      - if: matrix.src == 'pypi'
+        run: pip install -q pyannote.audio
+      - if: matrix.src == 'main'
+        run: pip install -q "pyannote.audio @ git+https://github.com/pyannote/pyannote-audio@main"
+      - run: pip list 2>/dev/null | grep -iE "pyannote|torch"
+      - run: for f in probe*.py; do echo "===== $f"; python $f; done
